@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { logActivity } from '../services/logService.js';
 
 // GET all operators
 export const getOperators = async (req, res) => {
@@ -137,6 +138,17 @@ export const assignZoneToOperator = async (req, res) => {
     
     await conn.commit();
     conn.release();
+
+    await logActivity({
+      action: 'Assign',
+      targetType: 'Zone Assignment',
+      targetId: zoneId,
+      targetName: zones[0].name,
+      changes: `Assigned operator ${users[0].user_name} to ${zones[0].name}`,
+      user: req.user,
+      zoneName: zones[0].name,
+      ip: req.ip
+    });
     
     res.status(201).json({ message: 'Operator assigned to zone successfully' });
   } catch (error) {
@@ -155,6 +167,15 @@ export const revokeZoneFromOperator = async (req, res) => {
   try {
     const conn = await pool.getConnection();
     
+    const [operators] = await conn.query(
+      'SELECT user_name FROM user WHERE user_id = ?',
+      [operatorId]
+    );
+    const [zones] = await conn.query(
+      'SELECT name FROM zone WHERE zone_id = ?',
+      [zoneId]
+    );
+
     const [result] = await conn.query(
       'DELETE FROM zone_permission WHERE zone_id = ? AND user_id = ?',
       [zoneId, operatorId]
@@ -165,6 +186,17 @@ export const revokeZoneFromOperator = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Permission not found' });
     }
+
+    await logActivity({
+      action: 'Delete',
+      targetType: 'Zone Assignment',
+      targetId: zoneId,
+      targetName: zones[0]?.name || `Zone ${zoneId}`,
+      changes: `Removed operator ${operators[0]?.user_name || operatorId} from zone ${zones[0]?.name || zoneId}`,
+      user: req.user,
+      zoneName: zones[0]?.name || null,
+      ip: req.ip
+    });
     
     res.status(200).json({ message: 'Operator removed from zone successfully' });
   } catch (error) {
@@ -180,6 +212,11 @@ export const revokeAllZonesFromOperator = async (req, res) => {
   try {
     const conn = await pool.getConnection();
     
+    const [operators] = await conn.query(
+      'SELECT user_name FROM user WHERE user_id = ?',
+      [operatorId]
+    );
+
     const [result] = await conn.query(
       'DELETE FROM zone_permission WHERE user_id = ?',
       [operatorId]
@@ -187,6 +224,16 @@ export const revokeAllZonesFromOperator = async (req, res) => {
     
     conn.release();
     
+    await logActivity({
+      action: 'Delete',
+      targetType: 'Zone Assignment',
+      targetId: operatorId,
+      targetName: `Operator ${operators[0]?.user_name || operatorId}`,
+      changes: `Revoked all zone assignments for operator ${operators[0]?.user_name || operatorId}`,
+      user: req.user,
+      ip: req.ip
+    });
+
     res.status(200).json({ 
       message: 'All zone permissions revoked', 
       removedCount: result.affectedRows 
@@ -245,6 +292,16 @@ export const batchAssignZones = async (req, res) => {
     
     await conn.commit();
     conn.release();
+
+    await logActivity({
+      action: 'Assign',
+      targetType: 'Zone Assignment',
+      targetId: operatorId,
+      targetName: `Operator ${users[0]?.user_name || operatorId}`,
+      changes: `Assigned ${addedCount} zone(s) to operator ${users[0]?.user_name || operatorId}`,
+      user: req.user,
+      ip: req.ip
+    });
     
     res.status(200).json({ 
       message: 'Zones assigned to operator', 

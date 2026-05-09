@@ -1,5 +1,5 @@
 import pool from '../config/database.js';
-
+import { logActivity } from "../services/logService.js";
 // GET all devices in accessible zones
 export const getDevices = async (req, res) => {
   try {
@@ -141,6 +141,19 @@ export const createDevice = async (req, res) => {
         'INSERT INTO sensor_device (device_id, read_interval_sec) VALUES (?, ?)',
         [result.insertId, 30]
       );
+      await logActivity({
+        userId: req.user.user_id,
+        action: "Create",
+        targetType: "Device",
+        targetName: name,
+        changes: `Created device: ${name}`,
+        zoneId: zone_id,
+        zoneName: zones[0].name,
+        deviceName: name,
+        ipAddress: req.ip,
+        userRole: req.user.user_type,
+        userName: req.user.user_name
+      });
     }
     // If device_type is 'control', create control_device record
     else if (deviceTypes[0].category === 'control') {
@@ -148,10 +161,24 @@ export const createDevice = async (req, res) => {
         'INSERT INTO control_device (device_id, control_channel, current_state) VALUES (?, ?, ?)',
         [result.insertId, '1', 'off']
       );
+
     }
     
     await conn.commit();
     conn.release();
+    await logActivity({
+      userId: req.user.user_id,
+      action: "Create",
+      targetType: "Device",
+      targetName: name,
+      changes: `Created device: ${name}`,
+      zoneId: zone_id,
+      zoneName: zones[0].name,
+      deviceName: name,
+      ipAddress: req.ip,
+      userRole: req.user.user_type,
+      userName: req.user.user_name
+    });
     
     res.status(201).json({
       message: 'Device created successfully',
@@ -228,8 +255,20 @@ export const updateDevice = async (req, res) => {
       `UPDATE device SET ${updateFields.join(', ')} WHERE device_id = ?`,
       values
     );
-    
     conn.release();
+    await logActivity({
+      userId: req.user.user_id,
+      action: "Update",
+      targetType: "Device",
+      targetName: device.name,
+      changes: `Updated device: ${device.name}`,
+      zoneId: device.zone_id,
+      zoneName: null, // Có thể lấy từ zone
+      deviceName: name || device.name,
+      ipAddress: req.ip,
+      userRole: req.user.user_type,
+      userName: req.user.user_name
+    });
     res.status(200).json({ message: 'Device updated successfully' });
   } catch (error) {
     console.error(error);
@@ -262,13 +301,24 @@ export const deleteDevice = async (req, res) => {
     
     // Delete device (cascade will handle sensor_device/control_device)
     await conn.query('DELETE FROM device WHERE device_id = ?', [deviceId]);
-    
     // Update zone device count
     await conn.query('UPDATE zone SET number_of_device = GREATEST(number_of_device - 1, 0) WHERE zone_id = ?', [device.zone_id]);
     
     await conn.commit();
     conn.release();
-    
+    await logActivity({
+      userId: req.user.user_id,
+      action: "Delete",
+      targetType: "Device",
+      targetName: device.name,
+      changes: `Deleted device: ${device.name}`,
+      zoneId: device.zone_id,
+      zoneName: null,
+      deviceName: device.name,
+      ipAddress: req.ip,
+      userRole: req.user.user_type,
+      userName: req.user.user_name
+    });
     res.status(200).json({ message: 'Device deleted successfully' });
   } catch (error) {
     if (conn) await conn.rollback();

@@ -498,6 +498,35 @@ CREATE TABLE threshold_action (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
  
 -- ============================================================
+-- 22. ACTIVITY_LOG
+-- ============================================================
+CREATE TABLE activity_log (
+    id              INT             NOT NULL AUTO_INCREMENT,
+    user_id         INT             NOT NULL,
+    action          ENUM('Create','Update','Delete','Assign','Control') NOT NULL,
+    target_type     ENUM('Threshold','Schedule','Device','Zone Assignment','User') NOT NULL,
+    target_name     VARCHAR(255)    NOT NULL,
+    changes         TEXT            NULL,
+    zone_id         INT             NULL,
+    zone_name       VARCHAR(100)    NULL,
+    device_name     VARCHAR(150)    NULL,
+    timestamp       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address      VARCHAR(45)     NULL,
+    user_role       ENUM('admin','operator','viewer') NOT NULL,
+    user_name       VARCHAR(150)    NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX idx_activity_timestamp (timestamp DESC),
+    INDEX idx_activity_user (user_id),
+    INDEX idx_activity_zone (zone_id),
+
+    CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES `user`(user_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_activity_zone FOREIGN KEY (zone_id) REFERENCES zone(zone_id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 SET FOREIGN_KEY_CHECKS = 1;
 -- ============================================================
  

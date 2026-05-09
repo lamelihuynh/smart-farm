@@ -9,7 +9,8 @@ import zoneRoutes from './routes/zoneRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js'; 
 import plantTypeRoutes from './routes/plantTypeRoutes.js'; 
 import permissionRoutes from './routes/permissionRoutes.js';
-
+import activityRoutes from './routes/activityRoutes.js';
+import sensorRoutes from './routes/sensorRoutes.js';
 dotenv.config(); 
 
 const app = express(); 
@@ -17,17 +18,18 @@ const PORT = process.env.PORT || 5001;
 app.use(morgan('dev'));
 
 app.use(cors({
-    origin: 'http://localhost:5173', 
+    origin: ['http://localhost:5173', 'http://localhost:5174'], 
     credentials: true
 })); 
 
 app.use(bodyParser.json()); 
-
+app.use("/api/activity-logs", activityRoutes);
 app.use('/api/auth', authRoutes); 
 app.use('/api/zones', zoneRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/plant-types', plantTypeRoutes);
 app.use('/api/permissions', permissionRoutes);
+app.use('/api/sensors',sensorRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

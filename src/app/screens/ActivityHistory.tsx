@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
@@ -6,21 +6,51 @@ import { type ActivityLog } from '../data/farmData';
 import { History, User, Settings, Calendar, Filter, Shield, MapPin, HardDrive } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarmData } from '../contexts/FarmDataContext';
-
+import { getActivityLogsAPI } from '../../services/api';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 export function ActivityHistory() {
-  const { user } = useAuth();
-  const { activityLogs } = useFarmData();
+  const { user, userAccessibleZones } = useAuth();
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterUser, setFilterUser] = useState<string>('all');
   const [filterAction, setFilterAction] = useState<string>('all');
 
+  useEffect(() => {
+    const fetchActivityLogs = async () => {
+      try {
+        setLoading(true);
+        const params: Record<string, string> = {};
+
+        if (filterType !== 'all') params.type = filterType;
+        if (filterUser !== 'all') params.user = filterUser;
+        if (filterAction !== 'all') params.action = filterAction;
+
+        const response = await getActivityLogsAPI(params);
+        setActivityLogs(response.data.data || []);
+      } catch (error) {
+        console.error('Error fetching activity logs:', error);
+        if (axios.isAxiosError(error)) {
+          toast.error(`Lỗi tải lịch sử hoạt động: ${error.response?.data?.message || error.message}`);
+        } else {
+          toast.error(`Lỗi tải lịch sử hoạt động: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchActivityLogs();
+  }, [filterType, filterUser, filterAction]);
+
+
   // Filter logs based on permissions and filters
   const filteredLogs = activityLogs.filter(log => {
     // Permission check - operators can only see logs from zones they're assigned to
-    // Since we're using zone_permission table now, we just filter by zone access
     if (user?.user_type === 'operator') {
-      // Only show logs from assigned zones
-      const hasZoneAccess = !log.zoneId || user.user_id; // For now trust the API permission check
+      const logZoneId = Number(log.zoneId);
+      const hasZoneAccess = !log.zoneId || userAccessibleZones.includes(logZoneId);
       if (!hasZoneAccess) {
         return false;
       }
@@ -32,7 +62,7 @@ export function ActivityHistory() {
     }
 
     // User filter
-    if (filterUser !== 'all' && log.userId !== filterUser) {
+    if (filterUser !== 'all' && String(log.userId) !== filterUser) {
       return false;
     }
 
@@ -44,8 +74,8 @@ export function ActivityHistory() {
     return true;
   });
 
-  const uniqueUsers = Array.from(new Set(activityLogs.map(log => log.userId))).map(userId => {
-    const log = activityLogs.find(l => l.userId === userId);
+  const uniqueUsers = Array.from(new Set(activityLogs.map(log => String(log.userId)))).map(userId => {
+    const log = activityLogs.find(l => String(l.userId) === userId);
     return { id: userId, name: log?.userName || '' };
   });
 
@@ -84,7 +114,7 @@ export function ActivityHistory() {
       <div>
         <h1 className="text-3xl font-bold">Lịch sử hoạt động</h1>
         <p className="text-gray-500 mt-1">
-          {user?.role === 'Admin'
+          {user?.user_type === 'admin'
             ? 'Xem tất cả hoạt động và thay đổi trong hệ thống'
             : 'Xem hoạt động trong các khu vực được gán'}
         </p>
@@ -121,7 +151,12 @@ export function ActivityHistory() {
             <div className="text-center">
               <p className="text-sm text-gray-600">Hôm nay</p>
               <p className="text-3xl font-bold text-orange-600 mt-1">
-                {activityLogs.filter(log => log.timestamp.includes('Just now') || log.timestamp.includes('minutes ago') || log.timestamp.includes('hour ago')).length}
+                {activityLogs.filter(log =>
+                  typeof log.timestamp === "string" &&
+                  (log.timestamp.includes('Just now') ||
+                  log.timestamp.includes('minutes ago') ||
+                  log.timestamp.includes('hour ago'))
+                ).length}
               </p>
             </div>
           </CardContent>
@@ -164,7 +199,7 @@ export function ActivityHistory() {
                 <SelectContent>
                   <SelectItem value="all">Tất cả người dùng</SelectItem>
                   {uniqueUsers.map(u => (
-                    <SelectItem key={u.id} value={u.id}>
+                    <SelectItem key={u.id} value={String(u.id)}>
                       {u.name}
                     </SelectItem>
                   ))}
