@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import jwt from 'jwt-simple';
 import bcryptjs from 'bcryptjs';
 import dotenv from 'dotenv';
+import { logActivity } from '../services/logService.js';
 
 dotenv.config();
 
@@ -26,12 +27,28 @@ export const register = async (req, res) => {
     const hashedPassword = await bcryptjs.hash(password, 10);
 
     // Thêm user vào database
-    await conn.query(
+    const [result] = await conn.query(
       'INSERT INTO user (email, user_name, password_hash, user_type) VALUES (?, ?, ?, ?)',
       [email, user_name, hashedPassword, user_type]
     );
 
     conn.release();
+
+    // Log registration activity
+    await logActivity({
+      userId: result.insertId,
+      action: 'Create',
+      targetType: 'User',
+      targetName: user_name,
+      changes: `User registered: ${user_name}`,
+      zoneId: null,
+      zoneName: null,
+      deviceName: null,
+      ipAddress: req.ip,
+      userRole: user_type,
+      userName: user_name
+    });
+
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
     console.error(error);
@@ -74,6 +91,22 @@ export const login = async (req, res) => {
     );
 
     conn.release();
+
+    // Log login activity
+    await logActivity({
+      userId: user.user_id,
+      action: 'Control',
+      targetType: 'User',
+      targetName: user.user_name,
+      changes: `User logged in`,
+      zoneId: null,
+      zoneName: null,
+      deviceName: null,
+      ipAddress: req.ip,
+      userRole: user.user_type,
+      userName: user.user_name
+    });
+
     res.status(200).json({ 
       message: 'Login successful',
       token, 

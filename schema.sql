@@ -498,6 +498,72 @@ CREATE TABLE threshold_action (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
  
 -- ============================================================
+-- 22. ACTIVITY_LOG
+-- ============================================================
+CREATE TABLE activity_log (
+    id              INT             NOT NULL AUTO_INCREMENT,
+    user_id         INT             NOT NULL,
+    action          ENUM('Create','Update','Delete','Assign','Control') NOT NULL,
+    target_type     ENUM('Threshold','Schedule','Device','Zone Assignment','User') NOT NULL,
+    target_name     VARCHAR(255)    NOT NULL,
+    changes         TEXT            NULL,
+    zone_id         INT             NULL,
+    zone_name       VARCHAR(100)    NULL,
+    device_name     VARCHAR(150)    NULL,
+    timestamp       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address      VARCHAR(45)     NULL,
+    user_role       ENUM('admin','operator','viewer') NOT NULL,
+    user_name       VARCHAR(150)    NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX idx_activity_timestamp (timestamp DESC),
+    INDEX idx_activity_user (user_id),
+    INDEX idx_activity_zone (zone_id),
+
+    CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES `user`(user_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_activity_zone FOREIGN KEY (zone_id) REFERENCES zone(zone_id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+CREATE TABLE IF NOT EXISTS system_logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    log_type VARCHAR(50),
+    device_id INT,
+    message TEXT,
+    metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2. Mồi dữ liệu cấu hình (Seed Data)
+-- Tắt kiểm tra khóa ngoại để nạp dữ liệu nhanh
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Nạp Khu vực (Zone)
+INSERT IGNORE INTO zone (zone_id, name) VALUES (1, 'Khu vực Nông trại');
+
+-- Nạp Loại thiết bị (Cần cột code và category theo schema của bạn)
+INSERT IGNORE INTO device_type (device_type_id, name, code, category) 
+VALUES (1, 'YoloBit Gateway', 'YOLO_01', 'sensor');
+
+-- Nạp Thiết bị (Cần các cột zone_id, device_type_id, name)
+-- "device_id = 1" để khớp với code Python của bạn
+INSERT IGNORE INTO device (device_id, zone_id, device_type_id, name, connection_status) 
+VALUES (1, 1, 1, 'Trạm Gateway Chính', 'online');
+
+-- Đăng ký thiết bị vào bảng sensor_device
+INSERT IGNORE INTO sensor_device (device_id, read_interval_sec) VALUES (1, 30);
+
+-- 3. Nạp định nghĩa các loại cảm biến (Metric)
+-- Phải khớp với các Key 'T', 'H', 'S', 'L' gửi từ Python lên
+REPLACE INTO sensor_metric (sensor_metric_id, device_type_id, metric_key, display_name, unit) VALUES 
+(1, 1, 'T', 'Nhiệt độ', '°C'),
+(2, 1, 'H', 'Độ ẩm không khí', '%'),
+(3, 1, 'S', 'Độ ẩm đất', '%'),
+(4, 1, 'L', 'Ánh sáng', 'Lux');
+
+-- ============================================================
 SET FOREIGN_KEY_CHECKS = 1;
 -- ============================================================
  
